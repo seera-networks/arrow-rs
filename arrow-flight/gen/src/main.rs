@@ -30,6 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // protoc in Ubuntu builder needs this option
         .protoc_arg("--experimental_allow_proto3_optional")
         .out_dir("src")
+        .build_transport(false)
         .compile_protos_with_config(prost_config(), &[proto_path], &[proto_dir])?;
 
     // read file contents to string
@@ -40,15 +41,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     file.read_to_string(&mut buffer)?;
     // append warning that file was auto-generated
     let mut file = OpenOptions::new()
+        .create(true)
         .write(true)
-        .truncate(true)
-        .open("src/arrow.flight.protocol.rs")?;
+        .open("src/arrow.flight.protocol.notransport.rs")?;
     file.write_all("// This file was automatically generated through the build.rs script, and should not be edited.\n\n".as_bytes())?;
     file.write_all(buffer.as_bytes())?;
-
-    let proto_dir = Path::new("../format");
-    // let proto_path = Path::new("../format/Flight.proto");
-    let proto_path = Path::new("../format/FlightNoService.proto");
 
     tonic_build::configure()
         // protoc in Ubuntu builder needs this option
@@ -59,14 +56,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // read file contents to string
     let mut file = OpenOptions::new()
         .read(true)
-        .open("src/arrow.flight.protocol.noservice.rs")?;
+        .open("src/arrow.flight.protocol.rs")?;
     let mut buffer = String::new();
     file.read_to_string(&mut buffer)?;
     // append warning that file was auto-generated
     let mut file = OpenOptions::new()
         .write(true)
         .truncate(true)
-        .open("src/arrow.flight.protocol.noservice.rs")?;
+        .open("src/arrow.flight.protocol.rs")?;
     file.write_all("// This file was automatically generated through the build.rs script, and should not be edited.\n\n".as_bytes())?;
     file.write_all(buffer.as_bytes())?;
 

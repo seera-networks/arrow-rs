@@ -47,10 +47,8 @@ paste = { version = "1.0" }
 prost = { version = "0.13.1", default-features = false, features = ["prost-derive"] }
 # For Timestamp type
 prost-types = { version = "0.13.1", default-features = false }
-# tokio = { version = "1.0", default-features = false, features = ["macros", "rt", "rt-multi-thread"] }
-# tonic = { version = "0.12.3", default-features = false, features = ["transport", "codegen", "prost"] }
+tokio = { version = "1.0", default-features = false, features = ["macros", "rt", "rt-multi-thread"], optional = true }
 tonic = { version = "0.12.3", default-features = false, features = ["codegen", "prost"] }
-
 
 # CLI-related dependencies
 anyhow = { version = "1.0", optional = true }
@@ -62,9 +60,9 @@ tracing-subscriber = { version = "0.3.1", default-features = false, features = [
 all-features = true
 
 [features]
-default = []
+default = ["transport"]
 flight-sql-experimental = ["arrow-arith", "arrow-data", "arrow-ord", "arrow-row", "arrow-select", "arrow-string", "once_cell"]
-noservice = []
+transport = ["tokio", "tonic/transport"]
 tls = ["tonic/tls"]
 
 # Enable CLI tools

@@ -24,7 +24,7 @@ use std::{
 use futures::{ready, FutureExt, Stream, StreamExt};
 use tonic::{metadata::MetadataMap, Status, Streaming};
 
-#[cfg(not(feature = "noservice"))]
+#[cfg(feature = "transport")]
 /// Extract [`LazyTrailers`] from [`Streaming`] [tonic] response.
 ///
 /// Note that [`LazyTrailers`] has inner mutability and will only hold actual data after [`ExtractTrailersStream`] is
