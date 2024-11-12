@@ -55,7 +55,10 @@ type ArrowResult<T> = std::result::Result<T, ArrowError>;
 mod gen {
     // Since this file is auto-generated, we suppress all warnings
     #![allow(missing_docs)]
+    #[cfg(feature = "transport")]
     include!("arrow.flight.protocol.rs");
+    #[cfg(not(feature = "transport"))]
+    include!("arrow.flight.protocol.notransport.rs");
 }
 
 /// Defines a `Flight` for generation or retrieval.
@@ -78,8 +81,10 @@ pub mod flight_service_server {
     pub use gen::flight_service_server::FlightServiceServer;
 }
 
+#[cfg(feature = "transport")]
 /// Mid Level [`FlightClient`]
 pub mod client;
+#[cfg(feature = "transport")]
 pub use client::FlightClient;
 
 /// Decoder to create [`RecordBatch`](arrow_array::RecordBatch) streams from [`FlightData`] streams.
@@ -122,6 +127,7 @@ pub mod utils;
 
 #[cfg(feature = "flight-sql-experimental")]
 pub mod sql;
+#[cfg(feature = "transport")]
 mod streams;
 
 use flight_descriptor::DescriptorType;
