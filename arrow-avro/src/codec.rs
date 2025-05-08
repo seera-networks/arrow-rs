@@ -29,7 +29,7 @@ use std::sync::Arc;
 /// To accommodate this we special case two-variant unions where one of the
 /// variants is the null type, and use this to derive arrow's notion of nullability
 #[derive(Debug, Copy, Clone)]
-enum Nulls {
+pub enum Nullability {
     /// The nulls are encoded as the first union variant
     NullFirst,
     /// The nulls are encoded as the second union variant
@@ -39,7 +39,7 @@ enum Nulls {
 /// An Avro datatype mapped to the arrow data model
 #[derive(Debug, Clone)]
 pub struct AvroDataType {
-    nulls: Option<Nulls>,
+    nullability: Option<Nullability>,
     metadata: HashMap<String, String>,
     codec: Codec,
 }
@@ -48,7 +48,26 @@ impl AvroDataType {
     /// Returns an arrow [`Field`] with the given name
     pub fn field_with_name(&self, name: &str) -> Field {
         let d = self.codec.data_type();
-        Field::new(name, d, self.nulls.is_some()).with_metadata(self.metadata.clone())
+        Field::new(name, d, self.nullability.is_some()).with_metadata(self.metadata.clone())
+    }
+
+    /// Returns a reference to the codec used by this data type
+    ///
+    /// The codec determines how Avro data is encoded and mapped to Arrow data types.
+    /// This is useful when we need to inspect or use the specific encoding of a field.
+    pub fn codec(&self) -> &Codec {
+        &self.codec
+    }
+
+    /// Returns the nullability status of this data type
+    ///
+    /// In Avro, nullability is represented through unions with null types.
+    /// The returned value indicates how nulls are encoded in the Avro format:
+    /// - `Some(Nullability::NullFirst)` - Nulls are encoded as the first union variant
+    /// - `Some(Nullability::NullSecond)` - Nulls are encoded as the second union variant
+    /// - `None` - The type is not nullable
+    pub fn nullability(&self) -> Option<Nullability> {
+        self.nullability
     }
 }
 
@@ -65,9 +84,17 @@ impl AvroField {
         self.data_type.field_with_name(&self.name)
     }
 
-    /// Returns the [`Codec`]
-    pub fn codec(&self) -> &Codec {
-        &self.data_type.codec
+    /// Returns the [`AvroDataType`]
+    pub fn data_type(&self) -> &AvroDataType {
+        &self.data_type
+    }
+
+    /// Returns the name of this Avro field
+    ///
+    /// This is the field name as defined in the Avro schema.
+    /// It's used to identify fields within a record structure.
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -96,25 +123,47 @@ impl<'a> TryFrom<&Schema<'a>> for AvroField {
 /// <https://avro.apache.org/docs/1.11.1/specification/#encodings>
 #[derive(Debug, Clone)]
 pub enum Codec {
+    /// Represents Avro null type, maps to Arrow's Null data type
     Null,
+    /// Represents Avro boolean type, maps to Arrow's Boolean data type
     Boolean,
+    /// Represents Avro int type, maps to Arrow's Int32 data type
     Int32,
+    /// Represents Avro long type, maps to Arrow's Int64 data type
     Int64,
+    /// Represents Avro float type, maps to Arrow's Float32 data type
     Float32,
+    /// Represents Avro double type, maps to Arrow's Float64 data type
     Float64,
+    /// Represents Avro bytes type, maps to Arrow's Binary data type
     Binary,
+    /// String data represented as UTF-8 encoded bytes, corresponding to Arrow's StringArray
     Utf8,
+    /// Represents Avro date logical type, maps to Arrow's Date32 data type
     Date32,
+    /// Represents Avro time-millis logical type, maps to Arrow's Time32(TimeUnit::Millisecond) data type
     TimeMillis,
+    /// Represents Avro time-micros logical type, maps to Arrow's Time64(TimeUnit::Microsecond) data type
     TimeMicros,
-    /// TimestampMillis(is_utc)
+    /// Represents Avro timestamp-millis or local-timestamp-millis logical type
+    ///
+    /// Maps to Arrow's Timestamp(TimeUnit::Millisecond) data type
+    /// The boolean parameter indicates whether the timestamp has a UTC timezone (true) or is local time (false)
     TimestampMillis(bool),
-    /// TimestampMicros(is_utc)
+    /// Represents Avro timestamp-micros or local-timestamp-micros logical type
+    ///
+    /// Maps to Arrow's Timestamp(TimeUnit::Microsecond) data type
+    /// The boolean parameter indicates whether the timestamp has a UTC timezone (true) or is local time (false)
     TimestampMicros(bool),
+    /// Represents Avro fixed type, maps to Arrow's FixedSizeBinary data type
+    /// The i32 parameter indicates the fixed binary size
     Fixed(i32),
+    /// Represents Avro array type, maps to Arrow's List data type
     List(Arc<AvroDataType>),
+    /// Represents Avro record type, maps to Arrow's Struct data type
     Struct(Arc<[AvroField]>),
-    Duration,
+    /// Represents Avro duration logical type, maps to Arrow's Interval(IntervalUnit::MonthDayNano) data type
+    Interval,
 }
 
 impl Codec {
@@ -137,9 +186,11 @@ impl Codec {
             Self::TimestampMicros(is_utc) => {
                 DataType::Timestamp(TimeUnit::Microsecond, is_utc.then(|| "+00:00".into()))
             }
-            Self::Duration => DataType::Interval(IntervalUnit::MonthDayNano),
+            Self::Interval => DataType::Interval(IntervalUnit::MonthDayNano),
             Self::Fixed(size) => DataType::FixedSizeBinary(*size),
-            Self::List(f) => DataType::List(Arc::new(f.field_with_name("item"))),
+            Self::List(f) => {
+                DataType::List(Arc::new(f.field_with_name(Field::LIST_FIELD_DEFAULT_NAME)))
+            }
             Self::Struct(f) => DataType::Struct(f.iter().map(|x| x.field()).collect()),
         }
     }
@@ -198,7 +249,7 @@ fn make_data_type<'a>(
 ) -> Result<AvroDataType, ArrowError> {
     match schema {
         Schema::TypeName(TypeName::Primitive(p)) => Ok(AvroDataType {
-            nulls: None,
+            nullability: None,
             metadata: Default::default(),
             codec: (*p).into(),
         }),
@@ -211,12 +262,12 @@ fn make_data_type<'a>(
             match (f.len() == 2, null) {
                 (true, Some(0)) => {
                     let mut field = make_data_type(&f[1], namespace, resolver)?;
-                    field.nulls = Some(Nulls::NullFirst);
+                    field.nullability = Some(Nullability::NullFirst);
                     Ok(field)
                 }
                 (true, Some(1)) => {
                     let mut field = make_data_type(&f[0], namespace, resolver)?;
-                    field.nulls = Some(Nulls::NullSecond);
+                    field.nullability = Some(Nullability::NullSecond);
                     Ok(field)
                 }
                 _ => Err(ArrowError::NotYetImplemented(format!(
@@ -239,7 +290,7 @@ fn make_data_type<'a>(
                     .collect::<Result<_, ArrowError>>()?;
 
                 let field = AvroDataType {
-                    nulls: None,
+                    nullability: None,
                     codec: Codec::Struct(fields),
                     metadata: r.attributes.field_metadata(),
                 };
@@ -249,7 +300,7 @@ fn make_data_type<'a>(
             ComplexType::Array(a) => {
                 let mut field = make_data_type(a.items.as_ref(), namespace, resolver)?;
                 Ok(AvroDataType {
-                    nulls: None,
+                    nullability: None,
                     metadata: a.attributes.field_metadata(),
                     codec: Codec::List(Arc::new(field)),
                 })
@@ -260,7 +311,7 @@ fn make_data_type<'a>(
                 })?;
 
                 let field = AvroDataType {
-                    nulls: None,
+                    nullability: None,
                     metadata: f.attributes.field_metadata(),
                     codec: Codec::Fixed(size),
                 };
@@ -296,7 +347,7 @@ fn make_data_type<'a>(
                 (Some("local-timestamp-micros"), c @ Codec::Int64) => {
                     *c = Codec::TimestampMicros(false)
                 }
-                (Some("duration"), c @ Codec::Fixed(12)) => *c = Codec::Duration,
+                (Some("duration"), c @ Codec::Fixed(12)) => *c = Codec::Interval,
                 (Some(logical), _) => {
                     // Insert unrecognized logical type into metadata map
                     field.metadata.insert("logicalType".into(), logical.into());

@@ -83,7 +83,7 @@ impl<OffsetSize: OffsetSizeTrait> ArrayReader for ListArrayReader<OffsetSize> {
 
     fn consume_batch(&mut self) -> Result<ArrayRef> {
         let next_batch_array = self.item_reader.consume_batch()?;
-        if next_batch_array.len() == 0 {
+        if next_batch_array.is_empty() {
             return Ok(new_empty_array(&self.data_type));
         }
 
@@ -265,7 +265,7 @@ mod tests {
         data_type: ArrowType,
         item_nullable: bool,
     ) -> ArrowType {
-        let field = Arc::new(Field::new("item", data_type, item_nullable));
+        let field = Arc::new(Field::new_list_field(data_type, item_nullable));
         GenericListArray::<OffsetSize>::DATA_TYPE_CONSTRUCTOR(field)
     }
 
