@@ -47,7 +47,7 @@ paste = { version = "1.0" , optional = true }
 prost = { version = "0.13.1", default-features = false, features = ["prost-derive"] }
 # For Timestamp type
 prost-types = { version = "0.13.1", default-features = false }
-tokio = { version = "1.0", default-features = false, features = ["macros", "rt", "rt-multi-thread"], optional = true, optional = true }
+tokio = { version = "1.0", default-features = false, features = ["macros", "rt", "rt-multi-thread"], optional = true }
 tonic = { version = "0.12.3", default-features = false, features = ["codegen", "prost"] }
 
 # CLI-related dependencies
