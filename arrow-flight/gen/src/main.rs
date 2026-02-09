@@ -25,12 +25,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proto_dir = Path::new("../format");
     let proto_path = Path::new("../format/Flight.proto");
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         // protoc in Ubuntu builder needs this option
         .protoc_arg("--experimental_allow_proto3_optional")
         .out_dir("src")
         .build_transport(false)
-        .compile_protos_with_config(prost_config(), &[proto_path], &[proto_dir])?;
+        .compile_with_config(prost_config(), &[proto_path], &[proto_dir])?;
 
     // read file contents to string
     let mut file = OpenOptions::new()
@@ -46,11 +46,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     file.write_all("// This file was automatically generated through the build.rs script, and should not be edited.\n\n".as_bytes())?;
     file.write_all(buffer.as_bytes())?;
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         // protoc in Ubuntu builder needs this option
         .protoc_arg("--experimental_allow_proto3_optional")
         .out_dir("src")
-        .compile_protos_with_config(prost_config(), &[proto_path], &[proto_dir])?;
+        .compile_with_config(prost_config(), &[proto_path], &[proto_dir])?;
 
     // read file contents to string
     let mut file = OpenOptions::new()
@@ -69,11 +69,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proto_dir = Path::new("../format");
     let proto_path = Path::new("../format/FlightSql.proto");
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         // protoc in Ubuntu builder needs this option
         .protoc_arg("--experimental_allow_proto3_optional")
         .out_dir("src/sql")
-        .compile_protos_with_config(prost_config(), &[proto_path], &[proto_dir])?;
+        .compile_with_config(prost_config(), &[proto_path], &[proto_dir])?;
 
     // read file contents to string
     let mut file = OpenOptions::new()

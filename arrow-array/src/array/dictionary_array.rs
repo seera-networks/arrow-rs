@@ -20,8 +20,8 @@ use crate::cast::AsArray;
 use crate::iterator::ArrayIter;
 use crate::types::*;
 use crate::{
-    make_array, Array, ArrayAccessor, ArrayRef, ArrowNativeTypeOp, PrimitiveArray, Scalar,
-    StringArray,
+    Array, ArrayAccessor, ArrayRef, ArrowNativeTypeOp, PrimitiveArray, Scalar, StringArray,
+    make_array,
 };
 use arrow_buffer::bit_util::set_bit;
 use arrow_buffer::buffer::NullBuffer;
@@ -485,6 +485,7 @@ impl<K: ArrowDictionaryKeyType> DictionaryArray<K> {
 
     /// Returns `PrimitiveDictionaryBuilder` of this dictionary array for mutating
     /// its keys and values if the underlying data buffer is not shared by others.
+    #[allow(clippy::result_large_err)]
     pub fn into_primitive_dict_builder<V>(self) -> Result<PrimitiveDictionaryBuilder<K, V>, Self>
     where
         V: ArrowPrimitiveType,
@@ -541,6 +542,7 @@ impl<K: ArrowDictionaryKeyType> DictionaryArray<K> {
     /// assert_eq!(typed.value(1), 11);
     /// assert_eq!(typed.value(2), 21);
     /// ```
+    #[allow(clippy::result_large_err)]
     pub fn unary_mut<F, V>(self, op: F) -> Result<DictionaryArray<K>, DictionaryArray<K>>
     where
         V: ArrowPrimitiveType,
@@ -695,7 +697,8 @@ impl<'a, T: ArrowDictionaryKeyType> FromIterator<&'a str> for DictionaryArray<T>
     }
 }
 
-impl<T: ArrowDictionaryKeyType> Array for DictionaryArray<T> {
+/// SAFETY: Correctly implements the contract of Arrow Arrays
+unsafe impl<T: ArrowDictionaryKeyType> Array for DictionaryArray<T> {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -854,7 +857,7 @@ impl<'a, K: ArrowDictionaryKeyType, V> TypedDictionaryArray<'a, K, V> {
     }
 }
 
-impl<K: ArrowDictionaryKeyType, V: Sync> Array for TypedDictionaryArray<'_, K, V> {
+unsafe impl<K: ArrowDictionaryKeyType, V: Sync> Array for TypedDictionaryArray<'_, K, V> {
     fn as_any(&self) -> &dyn Any {
         self.dictionary
     }
@@ -945,13 +948,13 @@ where
     }
 
     unsafe fn value_unchecked(&self, index: usize) -> Self::Item {
-        let val = self.dictionary.keys.value_unchecked(index);
+        let val = unsafe { self.dictionary.keys.value_unchecked(index) };
         let value_idx = val.as_usize();
 
         // As dictionary keys are only verified for non-null indexes
         // we must check the value is within bounds
         match value_idx < self.values.len() {
-            true => self.values.value_unchecked(value_idx),
+            true => unsafe { self.values.value_unchecked(value_idx) },
             false => Default::default(),
         }
     }
@@ -1049,7 +1052,7 @@ impl<K: ArrowDictionaryKeyType> AnyDictionaryArray for DictionaryArray<K> {
 mod tests {
     use super::*;
     use crate::cast::as_dictionary_array;
-    use crate::{Int16Array, Int32Array, Int8Array, RunArray};
+    use crate::{Int8Array, Int16Array, Int32Array, RunArray};
     use arrow_buffer::{Buffer, ToByteSlice};
 
     #[test]
